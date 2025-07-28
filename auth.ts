@@ -24,7 +24,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       }
       
       // Check if token is expired and refresh if needed
-      if (token.expires_at && Date.now() > token.expires_at * 1000) {
+      if (token.expires_at && Date.now() > Number(token.expires_at) * 1000) {
         try {
           console.log('Token expired, refreshing...')
           const response = await fetch('https://accounts.spotify.com/api/token', {

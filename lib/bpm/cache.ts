@@ -1,4 +1,4 @@
-import { BPMResult } from './getsongbpm'
+import { BPMResult } from '@/types/bpm'
 
 interface CachedBPMResult extends BPMResult {
   cachedAt: number

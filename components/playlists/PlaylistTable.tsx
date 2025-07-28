@@ -56,7 +56,7 @@ export function PlaylistTable() {
     }
 
     fetchPlaylists()
-  }, [setPlaylists])
+  }, [setPlaylists, toast])
 
   const handleSelectAll = () => {
     if (selectedPlaylists.size === playlists.length) {
@@ -110,7 +110,7 @@ export function PlaylistTable() {
       <div className="flex flex-col items-center justify-center p-12 text-center">
         <div className="text-gray-500 text-lg font-semibold mb-2">No Playlists Found</div>
         <p className="text-gray-600">
-          It looks like you don't have any playlists in your Spotify account yet.
+          It looks like you don&apos;t have any playlists in your Spotify account yet.
         </p>
       </div>
     )
