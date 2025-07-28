@@ -1,6 +1,7 @@
 'use server'
 
 import { bpmCache } from './cache'
+import { BPMResult } from '@/types/bpm'
 
 interface GetSongBPMResponse {
   song?: {
@@ -20,13 +21,6 @@ interface GetSongBPMResponse {
   }
 }
 
-interface BPMResult {
-  bpm: number
-  confidence: number
-  source: 'getsongbpm'
-  key?: string
-  timeSignature?: string
-}
 
 class GetSongBPMService {
   private apiKey: string | undefined
@@ -135,5 +129,12 @@ class GetSongBPMService {
   }
 }
 
-export const getSongBPMService = new GetSongBPMService()
-export type { BPMResult }
+const getSongBPMService = new GetSongBPMService()
+
+export async function searchBPM(artist: string, trackName: string): Promise<BPMResult | null> {
+  return getSongBPMService.searchBPM(artist, trackName)
+}
+
+export async function searchMultipleBPM(tracks: Array<{ artist: string; trackName: string; id: string }>): Promise<Map<string, BPMResult>> {
+  return getSongBPMService.searchMultipleBPM(tracks)
+}

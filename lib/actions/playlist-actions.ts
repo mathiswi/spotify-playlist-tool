@@ -2,7 +2,7 @@
 
 import { auth } from '@/auth'
 import { SpotifyPlaylist, PlaylistsResponse, SpotifyPlaylistTrack, SpotifyAudioFeatures } from '@/types/spotify'
-import { getSongBPMService } from '@/lib/bpm/getsongbpm'
+import { searchMultipleBPM } from '@/lib/bpm/getsongbpm'
 
 async function getAuthHeaders() {
   const session = await auth()
@@ -85,7 +85,7 @@ export async function fetchBPMData(tracks: Array<{ id: string; name: string; art
     }))
 
     // Fetch BPM data using GetSongBPM service
-    const bpmResults = await getSongBPMService.searchMultipleBPM(trackData)
+    const bpmResults = await searchMultipleBPM(trackData)
     
     // Convert BPM results to Spotify audio features format
     bpmResults.forEach((bpmResult, trackId) => {
