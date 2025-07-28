@@ -1,36 +1,65 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 🎵 Spotify Playlist Manager
 
-## Getting Started
+A web application for managing Spotify playlists with BPM filtering and playlist creation.
 
-First, run the development server:
+## Features
 
+- Select and combine tracks from multiple playlists
+- Filter tracks by BPM, artist, album, or track name
+- Sort tracks by various criteria
+- Save filtered collections as new playlists
+- BPM data from GetSongBPM API
+
+## Setup
+
+### Prerequisites
+
+- Node.js 18+
+- Spotify Developer Account
+
+### Installation
+
+1. Clone and install:
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+git clone <your-repo-url>
+cd spotify-playlist-tool
+npm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+2. Create `.env.local`:
+```bash
+# Required
+NEXTAUTH_SECRET=your_nextauth_secret
+NEXTAUTH_URL=http://localhost:3000
+AUTH_SPOTIFY_ID=your_spotify_client_id
+AUTH_SPOTIFY_SECRET=your_spotify_client_secret
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+# Optional (for BPM features)
+GETSONGBPM_API_KEY=your_getsongbpm_api_key
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+3. Set up Spotify app:
+   - Go to [Spotify Developer Dashboard](https://developer.spotify.com/dashboard)
+   - Create new app
+   - Add redirect URI: `http://localhost:3000/api/auth/callback/spotify`
+   - Copy credentials to `.env.local`
 
-## Learn More
+4. Run development server:
+```bash
+npm run dev
+```
 
-To learn more about Next.js, take a look at the following resources:
+## Tech Stack
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- Next.js 15 with TypeScript
+- shadcn/ui + Tailwind CSS
+- NextAuth.js for Spotify authentication
+- Zustand for state management
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Deployment
 
-## Deploy on Vercel
+Deploy to Vercel by connecting your GitHub repository and adding the environment variables in your Vercel dashboard.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+---
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+*Powered by [GetSongBPM](https://getsongbpm.com) for BPM data*
