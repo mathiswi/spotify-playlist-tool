@@ -1,6 +1,7 @@
 'use client'
 
 import { EnrichedTrack } from '@/types/spotify'
+import { useTrackStore } from '@/stores/trackStore'
 import {
   Table,
   TableBody,
@@ -9,6 +10,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { Checkbox } from '@/components/ui/checkbox'
 import Image from 'next/image'
 
 interface TrackTableProps {
@@ -22,6 +24,8 @@ function formatDuration(ms: number): string {
 }
 
 export function TrackTable({ tracks }: TrackTableProps) {
+  const { selectedTracks, toggleTrackSelection } = useTrackStore()
+
   if (tracks.length === 0) {
     return (
       <div className="text-center p-8 text-gray-500">
@@ -30,23 +34,57 @@ export function TrackTable({ tracks }: TrackTableProps) {
     )
   }
 
+  const selectedFilteredTracks = tracks.filter(track => selectedTracks.has(track.id))
+  const allFilteredSelected = tracks.length > 0 && selectedFilteredTracks.length === tracks.length
+
+  const handleSelectAll = () => {
+    if (allFilteredSelected) {
+      // Deselect all filtered tracks
+      tracks.forEach(track => {
+        if (selectedTracks.has(track.id)) {
+          toggleTrackSelection(track.id)
+        }
+      })
+    } else {
+      // Select all filtered tracks
+      tracks.forEach(track => {
+        if (!selectedTracks.has(track.id)) {
+          toggleTrackSelection(track.id)
+        }
+      })
+    }
+  }
+
   return (
     <div className="border rounded-lg">
       <Table>
         <TableHeader>
           <TableRow>
+            <TableHead className="w-12">
+              <Checkbox
+                checked={allFilteredSelected}
+                onCheckedChange={handleSelectAll}
+                aria-label="Select all tracks"
+              />
+            </TableHead>
             <TableHead className="w-16">Cover</TableHead>
             <TableHead>Track</TableHead>
             <TableHead>Artist</TableHead>
             <TableHead>Album</TableHead>
-            <TableHead className="w-20">BPM</TableHead>
             <TableHead className="w-20">Duration</TableHead>
             <TableHead>Playlist</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {tracks.map((track, index) => (
-            <TableRow key={`${track.id}-${track.playlistId}-${index}`}>
+            <TableRow key={`${track.id}-${track.playlistId}-${index}`} className={track.isDuplicate ? 'bg-yellow-50' : ''}>
+              <TableCell>
+                <Checkbox
+                  checked={selectedTracks.has(track.id)}
+                  onCheckedChange={() => toggleTrackSelection(track.id)}
+                  aria-label={`Select ${track.name}`}
+                />
+              </TableCell>
               <TableCell>
                 {track.album.images && track.album.images.length > 0 && track.album.images[0] && (
                   <Image
@@ -72,18 +110,6 @@ export function TrackTable({ tracks }: TrackTableProps) {
                 {track.artists.map(artist => artist.name).join(', ')}
               </TableCell>
               <TableCell>{track.album.name}</TableCell>
-              <TableCell>
-                {track.audioFeatures ? (
-                  <div className="flex flex-col">
-                    <span className="font-mono font-semibold">
-                      {Math.round(track.audioFeatures.tempo)}
-                    </span>
-                    <span className="text-xs text-green-600">GetSongBPM</span>
-                  </div>
-                ) : (
-                  <span className="text-gray-400">-</span>
-                )}
-              </TableCell>
               <TableCell className="font-mono">
                 {formatDuration(track.duration_ms)}
               </TableCell>

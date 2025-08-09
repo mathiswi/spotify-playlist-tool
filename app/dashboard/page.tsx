@@ -9,6 +9,12 @@ export default async function DashboardPage() {
     redirect('/')
   }
 
+  // Check if session has invalid tokens
+  if (!session.token?.accessToken || !session.token?.refreshToken) {
+    console.log('Dashboard: Invalid session tokens, redirecting to home')
+    redirect('/')
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="container mx-auto px-4 py-8">

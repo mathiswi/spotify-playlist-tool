@@ -1,8 +1,13 @@
 {
   "name": "spotify-playlist-tool",
   "version": "0.1.0",
-  "description": "A web application for managing Spotify playlists with BPM filtering and playlist creation",
-  "keywords": ["spotify", "playlist", "bpm", "music", "nextjs"],
+  "description": "A web application for managing Spotify playlists and playlist creation",
+  "keywords": [
+    "spotify",
+    "playlist",
+    "music",
+    "nextjs"
+  ],
   "author": "Your Name",
   "license": "MIT",
   "repository": {
@@ -22,11 +27,11 @@
     "@radix-ui/react-dialog": "^1.1.14",
     "@radix-ui/react-icons": "^1.3.2",
     "@radix-ui/react-select": "^2.2.5",
-    "@radix-ui/react-slider": "^1.3.5",
     "@radix-ui/react-tabs": "^1.1.12",
     "@radix-ui/react-toast": "^1.2.14",
     "@tanstack/react-table": "^8.21.3",
     "axios": "^1.11.0",
+    "lucide-react": "^0.536.0",
     "next": "15.4.4",
     "next-auth": "^5.0.0-beta.29",
     "react": "19.1.0",

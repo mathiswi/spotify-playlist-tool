@@ -1,8 +1,9 @@
 'use client'
 
 import { useTrackStore } from '@/stores/trackStore'
+import { EnrichedTrack } from '@/types/spotify'
 import { Input } from '@/components/ui/input'
-import { Slider } from '@/components/ui/slider'
+import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
   Select,
@@ -13,33 +14,59 @@ import {
 } from '@/components/ui/select'
 import { TrackTable } from './TrackTable'
 import { SavePlaylistDialog } from './SavePlaylistDialog'
-import { BPMSetupInstructions } from '../BPMSetupInstructions'
+
+interface AlbumGroup {
+  album: EnrichedTrack['album']
+  tracks: EnrichedTrack[]
+  selectedCount: number
+}
 
 export function TrackManager() {
   const {
     enrichedTracks,
+    selectedTracks,
     isLoading,
     loadingProgress,
     error,
-    minBpm,
-    maxBpm,
-    includeDoubleBpm,
     searchQuery,
     sortBy,
     sortOrder,
-    setMinBpm,
-    setMaxBpm,
-    setIncludeDoubleBpm,
+    showDuplicates,
     setSearchQuery,
     setSortBy,
     setSortOrder,
     getFilteredTracks,
+    getSelectedTracks,
+    selectAllTracks,
+    clearTrackSelection,
+    selectAlbumTracks,
+    deselectAlbumTracks,
+    setShowDuplicates,
   } = useTrackStore()
 
   const filteredTracks = getFilteredTracks()
 
-  const tracksWithAudioFeatures = enrichedTracks.filter(track => track.audioFeatures)
-  const hasAudioFeatures = tracksWithAudioFeatures.length > 0
+  // Group tracks by album for album selection
+  const albumGroups = filteredTracks.reduce((acc, track) => {
+    const albumId = track.album.id
+    if (!acc[albumId]) {
+      acc[albumId] = {
+        album: track.album,
+        tracks: [],
+        selectedCount: 0,
+      }
+    }
+    acc[albumId].tracks.push(track)
+    if (selectedTracks.has(track.id)) {
+      acc[albumId].selectedCount++
+    }
+    return acc
+  }, {} as Record<string, AlbumGroup>)
+
+  const albumEntries = Object.entries(albumGroups).sort((a, b) => 
+    a[1].album.name.localeCompare(b[1].album.name)
+  )
+
 
   if (enrichedTracks.length === 0) {
     return (
@@ -54,24 +81,11 @@ export function TrackManager() {
 
   return (
     <div className="space-y-6">
-      {/* BPM Setup Instructions */}
-      <BPMSetupInstructions show={!hasAudioFeatures && enrichedTracks.length > 0} />
-
-      {/* Audio Features Notice */}
-      {hasAudioFeatures && enrichedTracks.length > 0 && (
-        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-          <h4 className="text-sm font-medium text-green-800 mb-1">✅ BPM Data from GetSongBPM</h4>
-          <p className="text-sm text-green-700">
-            BPM data is being loaded from GetSongBPM.com. Found BPM data for {tracksWithAudioFeatures.length} tracks.
-          </p>
-        </div>
-      )}
-
       {/* Filters */}
       <div className="bg-gray-50 p-4 rounded-lg space-y-4">
         <h3 className="text-lg font-semibold">Filters & Sorting</h3>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           {/* Search */}
           <div className="space-y-2">
             <label className="text-sm font-medium">Search</label>
@@ -82,46 +96,10 @@ export function TrackManager() {
             />
           </div>
 
-          {/* BPM Range */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium">
-              BPM Range: {minBpm} - {maxBpm}
-              {!hasAudioFeatures && (
-                <span className="text-xs text-gray-500 ml-2">(No BPM data available)</span>
-              )}
-            </label>
-            <div className="px-2">
-              <Slider
-                value={[minBpm, maxBpm]}
-                onValueChange={([min, max]) => {
-                  setMinBpm(min)
-                  setMaxBpm(max)
-                }}
-                max={200}
-                min={0}
-                step={1}
-                className="w-full"
-                disabled={!hasAudioFeatures}
-              />
-            </div>
-            {hasAudioFeatures && (
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="includeDoubleBpm"
-                  checked={includeDoubleBpm}
-                  onCheckedChange={(checked) => setIncludeDoubleBpm(checked === true)}
-                />
-                <label htmlFor="includeDoubleBpm" className="text-xs text-gray-600">
-                  Include double/half BPM (same rhythm)
-                </label>
-              </div>
-            )}
-          </div>
-
           {/* Sort By */}
           <div className="space-y-2">
             <label className="text-sm font-medium">Sort By</label>
-            <Select value={sortBy} onValueChange={(value: 'name' | 'artist' | 'album' | 'bpm' | 'duration') => setSortBy(value)}>
+            <Select value={sortBy} onValueChange={(value: 'name' | 'artist' | 'album' | 'duration') => setSortBy(value)}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
@@ -129,9 +107,6 @@ export function TrackManager() {
                 <SelectItem value="name">Track Name</SelectItem>
                 <SelectItem value="artist">Artist</SelectItem>
                 <SelectItem value="album">Album</SelectItem>
-                <SelectItem value="bpm" disabled={!hasAudioFeatures}>
-                  BPM{!hasAudioFeatures && " (No data)"}
-                </SelectItem>
                 <SelectItem value="duration">Duration</SelectItem>
               </SelectContent>
             </Select>
@@ -150,31 +125,117 @@ export function TrackManager() {
               </SelectContent>
             </Select>
           </div>
+
+          {/* Duplicates */}
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Duplicates</label>
+            <div className="flex items-center space-x-2 pt-2">
+              <Checkbox
+                id="show-duplicates"
+                checked={showDuplicates}
+                onCheckedChange={(checked) => setShowDuplicates(checked === true)}
+              />
+              <label htmlFor="show-duplicates" className="text-sm">
+                Show duplicates
+              </label>
+            </div>
+          </div>
         </div>
+
+        {/* Track Selection Controls */}
+        <div className="flex flex-wrap gap-2">
+          <Button
+            onClick={selectAllTracks}
+            variant="outline"
+            size="sm"
+          >
+            Select All Filtered
+          </Button>
+          <Button
+            onClick={clearTrackSelection}
+            variant="outline"
+            size="sm"
+          >
+            Clear Selection
+          </Button>
+        </div>
+
+        {/* Album Selection */}
+        {albumEntries.length > 1 && (
+          <div className="space-y-2">
+            <h4 className="text-sm font-medium">Select by Album</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 max-h-32 overflow-y-auto">
+              {albumEntries.map(([albumId, { album, tracks, selectedCount }]) => {
+                const allSelected = selectedCount === tracks.length
+                const noneSelected = selectedCount === 0
+                
+                return (
+                  <div key={albumId} className="flex items-center justify-between p-2 bg-white rounded border text-xs">
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium truncate">{album.name}</div>
+                      <div className="text-gray-500 truncate">
+                        {album.artists[0]?.name} • {tracks.length} tracks
+                      </div>
+                      <div className="text-blue-600">
+                        {selectedCount}/{tracks.length} selected
+                      </div>
+                    </div>
+                    <div className="flex gap-1 ml-2">
+                      {!allSelected && (
+                        <Button
+                          onClick={() => selectAlbumTracks(albumId)}
+                          variant="outline"
+                          size="sm"
+                          className="text-xs px-2 py-1 h-auto"
+                        >
+                          Select
+                        </Button>
+                      )}
+                      {!noneSelected && (
+                        <Button
+                          onClick={() => deselectAlbumTracks(albumId)}
+                          variant="outline"
+                          size="sm"
+                          className="text-xs px-2 py-1 h-auto"
+                        >
+                          Deselect
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Stats */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4 text-sm text-gray-600">
+          <div className="flex flex-col space-y-1 text-sm text-gray-600">
             <div>
               Showing <span className="font-semibold text-blue-600">{filteredTracks.length}</span> of{' '}
               <span className="font-semibold">{enrichedTracks.length}</span> tracks
             </div>
-            {hasAudioFeatures && (
-              <div>
-                <span className="font-semibold text-green-600">{tracksWithAudioFeatures.length}</span> with BPM data
-              </div>
-            )}
-            {!hasAudioFeatures && enrichedTracks.length > 0 && (
-              <div className="text-yellow-600">
-                <span className="font-semibold">0</span> tracks with BPM data
-              </div>
-            )}
+            <div>
+              <span className="font-semibold text-green-600">{selectedTracks.size}</span> tracks selected
+              {(() => {
+                const duplicateCount = enrichedTracks.filter(track => track.isDuplicate).length
+                if (duplicateCount > 0) {
+                  return (
+                    <span className="ml-2 text-yellow-600">
+                      • {duplicateCount} duplicates {showDuplicates ? 'shown' : 'hidden'}
+                    </span>
+                  )
+                }
+                return null
+              })()}
+            </div>
           </div>
           
-          {filteredTracks.length > 0 && (
-            <SavePlaylistDialog tracks={filteredTracks} />
+          {selectedTracks.size > 0 && (
+            <SavePlaylistDialog tracks={getSelectedTracks()} />
           )}
         </div>
 

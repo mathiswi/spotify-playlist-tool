@@ -1,14 +1,13 @@
 # 🎵 Spotify Playlist Manager
 
-A web application for managing Spotify playlists with BPM filtering and playlist creation.
+A web application for managing Spotify playlists and playlist creation.
 
 ## Features
 
 - Select and combine tracks from multiple playlists
-- Filter tracks by BPM, artist, album, or track name
+- Filter tracks by artist, album, or track name
 - Sort tracks by various criteria
 - Save filtered collections as new playlists
-- BPM data from GetSongBPM API
 
 ## Setup
 
@@ -34,8 +33,6 @@ NEXTAUTH_URL=http://localhost:3000
 AUTH_SPOTIFY_ID=your_spotify_client_id
 AUTH_SPOTIFY_SECRET=your_spotify_client_secret
 
-# Optional (for BPM features)
-GETSONGBPM_API_KEY=your_getsongbpm_api_key
 ```
 
 3. Set up Spotify app:
@@ -60,6 +57,3 @@ npm run dev
 
 Deploy to Vercel by connecting your GitHub repository and adding the environment variables in your Vercel dashboard.
 
----
-
-*Powered by [GetSongBPM](https://getsongbpm.com) for BPM data*

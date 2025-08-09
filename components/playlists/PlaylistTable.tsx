@@ -1,21 +1,12 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useTrackStore } from '@/stores/trackStore'
-import { fetchUserPlaylists } from '@/lib/actions/playlist-actions'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
-import { Checkbox } from '@/components/ui/checkbox'
+import { fetchUserPlaylists, updateMultiplePlaylistPrivacy, deleteMultiplePlaylists } from '@/lib/actions/playlist-actions'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/hooks/use-toast'
-import Image from 'next/image'
-import { PlaylistTableSkeleton } from './PlaylistTableSkeleton'
+import { SelectionTable } from '@/components/ui/SelectionTable'
+import { signIn } from 'next-auth/react'
 
 export function PlaylistTable() {
   const {
@@ -30,14 +21,19 @@ export function PlaylistTable() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [trackLoading, setTrackLoading] = useState(false)
+  const [privacyLoading, setPrivacyLoading] = useState(false)
   const { toast } = useToast()
+  const hasFetched = useRef(false)
 
   useEffect(() => {
     async function fetchPlaylists() {
+      if (hasFetched.current) return
+      
       try {
         setLoading(true)
         const userPlaylists = await fetchUserPlaylists()
         setPlaylists(userPlaylists)
+        hasFetched.current = true
         toast({
           title: "Playlists loaded",
           description: `Found ${userPlaylists.length} playlists in your library.`,
@@ -45,18 +41,31 @@ export function PlaylistTable() {
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'Failed to load playlists'
         setError(errorMessage)
+        
+        // Check if it's an authentication error
+        const isAuthError = errorMessage.includes('sign in again') || 
+                           errorMessage.includes('Unauthorized') ||
+                           errorMessage.includes('access token')
+        
         toast({
           variant: "destructive",
           title: "Failed to load playlists",
-          description: errorMessage,
+          description: isAuthError 
+            ? "Your session has expired. Please sign in again." 
+            : errorMessage,
         })
       } finally {
         setLoading(false)
       }
     }
 
-    fetchPlaylists()
-  }, [setPlaylists, toast])
+    // Only fetch if we don't have playlists yet and haven't fetched before
+    if (playlists.length === 0 && !hasFetched.current) {
+      fetchPlaylists()
+    } else {
+      setLoading(false)
+    }
+  }, [playlists.length, setPlaylists, toast])
 
   const handleSelectAll = () => {
     if (selectedPlaylists.size === playlists.length) {
@@ -70,6 +79,17 @@ export function PlaylistTable() {
     }
   }
 
+  // Transform playlists for SelectionTable
+  const playlistItems = playlists.map(playlist => ({
+    id: playlist.id,
+    name: playlist.name,
+    description: playlist.description,
+    images: playlist.images,
+    trackCount: playlist.tracks.total,
+    owner: playlist.owner.display_name || playlist.owner.id,
+    isPublic: playlist.public
+  }))
+
   const handleLoadTracks = async () => {
     setTrackLoading(true)
     try {
@@ -79,158 +99,166 @@ export function PlaylistTable() {
         description: "Switch to the 'Manage Tracks' tab to filter and sort your tracks.",
       })
     } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Something went wrong loading tracks."
+      const isAuthError = errorMessage.includes('sign in again') || 
+                         errorMessage.includes('Unauthorized') ||
+                         errorMessage.includes('access token')
+      
       toast({
         variant: "destructive",
         title: "Failed to load tracks",
-        description: err instanceof Error ? err.message : "Something went wrong loading tracks.",
+        description: isAuthError 
+          ? "Your session has expired. Please refresh the page and sign in again." 
+          : errorMessage,
       })
     } finally {
       setTrackLoading(false)
     }
   }
 
-  if (loading) {
-    return <PlaylistTableSkeleton />
+  const handleMakePrivate = async () => {
+    if (selectedPlaylists.size === 0) return
+    
+    setPrivacyLoading(true)
+    try {
+      const playlistIds = Array.from(selectedPlaylists)
+      const result = await updateMultiplePlaylistPrivacy(playlistIds, false)
+      
+      // Update local state only for successfully updated playlists
+      if (result.updated > 0) {
+        // Re-fetch to get actual ownership info
+        const updatedPlaylists = await fetchUserPlaylists()
+        setPlaylists(updatedPlaylists)
+      }
+      
+      const message = result.skipped > 0 
+        ? `Updated ${result.updated} playlist(s) to private. Skipped ${result.skipped} playlist(s) you don't own.`
+        : `Successfully made ${result.updated} playlist(s) private.`
+      
+      toast({
+        title: "Playlists updated",
+        description: message,
+      })
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Something went wrong updating playlists."
+      toast({
+        variant: "destructive",
+        title: "Failed to update playlists",
+        description: errorMessage,
+      })
+    } finally {
+      setPrivacyLoading(false)
+    }
+  }
+
+  const handleMakePublic = async () => {
+    if (selectedPlaylists.size === 0) return
+    
+    setPrivacyLoading(true)
+    try {
+      const playlistIds = Array.from(selectedPlaylists)
+      const result = await updateMultiplePlaylistPrivacy(playlistIds, true)
+      
+      // Update local state only for successfully updated playlists
+      if (result.updated > 0) {
+        // Re-fetch to get actual ownership info
+        const updatedPlaylists = await fetchUserPlaylists()
+        setPlaylists(updatedPlaylists)
+      }
+      
+      const message = result.skipped > 0 
+        ? `Updated ${result.updated} playlist(s) to public. Skipped ${result.skipped} playlist(s) you don't own.`
+        : `Successfully made ${result.updated} playlist(s) public.`
+      
+      toast({
+        title: "Playlists updated",
+        description: message,
+      })
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Something went wrong updating playlists."
+      toast({
+        variant: "destructive",
+        title: "Failed to update playlists",
+        description: errorMessage,
+      })
+    } finally {
+      setPrivacyLoading(false)
+    }
+  }
+
+  const handleDeletePlaylists = async () => {
+    if (selectedPlaylists.size === 0) return
+    
+    const confirmDelete = window.confirm(
+      `Are you sure you want to delete ${selectedPlaylists.size} playlist(s)? This action cannot be undone.`
+    )
+    
+    if (!confirmDelete) return
+    
+    setPrivacyLoading(true)
+    try {
+      const playlistIds = Array.from(selectedPlaylists)
+      await deleteMultiplePlaylists(playlistIds)
+      
+      // Remove deleted playlists from local state
+      setPlaylists(playlists.filter(playlist => !selectedPlaylists.has(playlist.id)))
+      clearSelection()
+      
+      toast({
+        title: "Playlists deleted",
+        description: `Successfully deleted ${selectedPlaylists.size} playlist(s).`,
+      })
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Something went wrong deleting playlists."
+      toast({
+        variant: "destructive",
+        title: "Failed to delete playlists",
+        description: errorMessage,
+      })
+    } finally {
+      setPrivacyLoading(false)
+    }
   }
 
   if (error) {
+    const isAuthError = error.includes('sign in again') || 
+                       error.includes('Unauthorized') ||
+                       error.includes('access token')
+    
     return (
       <div className="flex flex-col items-center justify-center p-12 text-center">
         <div className="text-red-500 text-lg font-semibold mb-2">Failed to Load Playlists</div>
         <p className="text-gray-600 mb-4">{error}</p>
-        <Button onClick={() => window.location.reload()} variant="outline">
-          Try Again
-        </Button>
-      </div>
-    )
-  }
-
-  if (playlists.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center p-12 text-center">
-        <div className="text-gray-500 text-lg font-semibold mb-2">No Playlists Found</div>
-        <p className="text-gray-600">
-          It looks like you don&apos;t have any playlists in your Spotify account yet.
-        </p>
+        <div className="flex gap-2">
+          {isAuthError ? (
+            <Button onClick={() => signIn('spotify')} variant="default">
+              Sign In Again
+            </Button>
+          ) : (
+            <Button onClick={() => window.location.reload()} variant="outline">
+              Try Again
+            </Button>
+          )}
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="space-y-4">
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <Checkbox
-              checked={selectedPlaylists.size === playlists.length && playlists.length > 0}
-              onCheckedChange={handleSelectAll}
-            />
-            <span className="text-sm text-gray-600">
-              Select All ({selectedPlaylists.size} of {playlists.length} selected)
-            </span>
-          </div>
-          
-          {selectedPlaylists.size > 0 && (
-            <div className="flex space-x-2">
-              <Button onClick={clearSelection} variant="outline">
-                Clear Selection
-              </Button>
-              <Button onClick={handleLoadTracks} disabled={trackLoading}>
-                {trackLoading ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                    Loading Tracks...
-                  </>
-                ) : (
-                  `Load Tracks (${selectedPlaylists.size} playlists)`
-                )}
-              </Button>
-            </div>
-          )}
-        </div>
-
-        {/* Selection Info */}
-        <div className="text-xs text-gray-500 bg-gray-50 p-2 rounded min-h-[2rem] flex items-center">
-          {selectedPlaylists.size > 0 ? (() => {
-            const selectedPlaylistsList = playlists.filter(p => selectedPlaylists.has(p.id))
-            const totalTracks = selectedPlaylistsList.reduce((sum, playlist) => sum + playlist.tracks.total, 0)
-            
-            return (
-              <>
-                <span className="font-medium text-blue-700">Selected playlists will load ~{totalTracks} tracks: </span>
-                {selectedPlaylistsList.map((playlist, index) => (
-                  <span key={playlist.id}>
-                    {index > 0 && ', '}
-                    <span className="text-gray-700 font-medium">{playlist.name}</span>{' '}
-                    ({playlist.tracks.total})
-                  </span>
-                ))}
-              </>
-            )
-          })() : (
-            <span>Select playlists above to see track count and summary here</span>
-          )}
-        </div>
-      </div>
-
-      <div className="border rounded-lg">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-12">Select</TableHead>
-              <TableHead className="w-16">Image</TableHead>
-              <TableHead>Name</TableHead>
-              <TableHead className="w-20">Tracks</TableHead>
-              <TableHead>Owner</TableHead>
-              <TableHead className="w-24">Public</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {playlists.map((playlist) => (
-              <TableRow key={playlist.id}>
-                <TableCell>
-                  <Checkbox
-                    checked={selectedPlaylists.has(playlist.id)}
-                    onCheckedChange={() => togglePlaylistSelection(playlist.id)}
-                  />
-                </TableCell>
-                <TableCell>
-                  {playlist.images && playlist.images.length > 0 && playlist.images[0] && (
-                    <Image
-                      src={playlist.images[0].url}
-                      alt={playlist.name}
-                      width={40}
-                      height={40}
-                      className="rounded"
-                    />
-                  )}
-                </TableCell>
-                <TableCell className="font-medium">
-                  <div>
-                    <div className="font-semibold">{playlist.name}</div>
-                    {playlist.description && (
-                      <div className="text-sm text-gray-500 truncate max-w-xs">
-                        {playlist.description}
-                      </div>
-                    )}
-                  </div>
-                </TableCell>
-                <TableCell>{playlist.tracks.total}</TableCell>
-                <TableCell>{playlist.owner.display_name || playlist.owner.id}</TableCell>
-                <TableCell>
-                  <span className={`px-2 py-1 rounded-full text-xs ${
-                    playlist.public 
-                      ? 'bg-green-100 text-green-800' 
-                      : 'bg-gray-100 text-gray-800'
-                  }`}>
-                    {playlist.public ? 'Public' : 'Private'}
-                  </span>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
-    </div>
+    <SelectionTable
+      items={playlistItems}
+      selectedItems={selectedPlaylists}
+      isLoading={loading}
+      type="playlists"
+      onToggleSelection={togglePlaylistSelection}
+      onSelectAll={handleSelectAll}
+      onClearSelection={clearSelection}
+      onLoadTracks={handleLoadTracks}
+      trackLoading={trackLoading}
+      onMakePrivate={handleMakePrivate}
+      onMakePublic={handleMakePublic}
+      onDeleteItems={handleDeletePlaylists}
+      privacyLoading={privacyLoading}
+    />
   )
 }
