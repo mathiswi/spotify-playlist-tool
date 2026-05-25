@@ -379,13 +379,37 @@ export async function addTracksToSpotifyPlaylist(playlistId: string, trackUris: 
   }
 }
 
+async function runWithConcurrency<T, R>(
+  items: T[],
+  limit: number,
+  worker: (item: T) => Promise<R>
+): Promise<PromiseSettledResult<R>[]> {
+  const results: PromiseSettledResult<R>[] = new Array(items.length)
+  let next = 0
+
+  async function run() {
+    while (true) {
+      const i = next++
+      if (i >= items.length) return
+      try {
+        results[i] = { status: 'fulfilled', value: await worker(items[i]) }
+      } catch (error) {
+        results[i] = { status: 'rejected', reason: error }
+      }
+    }
+  }
+
+  const workers = Array.from({ length: Math.min(limit, items.length) }, run)
+  await Promise.all(workers)
+  return results
+}
+
 export async function updatePlaylistPrivacy(playlistId: string, isPublic: boolean) {
   const headers = await getAuthHeaders()
-  
-  // Retry logic for Bad Gateway errors
-  let retries = 3
+
+  let retries = 5
   let lastError: Error | null = null
-  
+
   while (retries > 0) {
     try {
       const response = await fetch(
@@ -398,26 +422,36 @@ export async function updatePlaylistPrivacy(playlistId: string, isPublic: boolea
           }),
         }
       )
-      
+
       if (response.status === 403) {
         throw new Error('You can only update playlists you own')
       }
-      
+
+      if (response.status === 429) {
+        // Rate limited - honor Retry-After header (in seconds)
+        const retryAfter = parseInt(response.headers.get('Retry-After') ?? '1', 10)
+        retries--
+        lastError = new Error('Rate limited')
+        if (retries > 0) {
+          await new Promise(resolve => setTimeout(resolve, (retryAfter + 1) * 1000))
+          continue
+        }
+      }
+
       if (response.status === 502) {
         // Bad Gateway - retry
         retries--
         lastError = new Error('Bad Gateway')
         if (retries > 0) {
-          await new Promise(resolve => setTimeout(resolve, 1000)) // Wait 1 second before retry
+          await new Promise(resolve => setTimeout(resolve, 1000))
           continue
         }
       }
-      
+
       if (!response.ok) {
         throw new Error(`Failed to update playlist privacy: ${response.statusText}`)
       }
-      
-      // Success
+
       return { success: true }
     } catch (error) {
       if (error instanceof Error && error.message === 'You can only update playlists you own') {
@@ -430,7 +464,7 @@ export async function updatePlaylistPrivacy(playlistId: string, isPublic: boolea
       }
     }
   }
-  
+
   throw lastError || new Error('Failed to update playlist privacy after retries')
 }
 
@@ -463,12 +497,12 @@ export async function updateMultiplePlaylistPrivacy(playlistIds: string[], isPub
     throw new Error('You don\'t own any of the selected playlists. Only playlist owners can change privacy settings.')
   }
   
-  // Update only owned playlists
-  const promises = ownedPlaylistIds.map(playlistId => 
-    updatePlaylistPrivacy(playlistId, isPublic)
+  // Update only owned playlists — cap concurrency to avoid Spotify 429s
+  const results = await runWithConcurrency(
+    ownedPlaylistIds,
+    3,
+    (playlistId) => updatePlaylistPrivacy(playlistId, isPublic)
   )
-  
-  const results = await Promise.allSettled(promises)
   const failures = results.filter((result): result is PromiseRejectedResult => result.status === 'rejected')
   
   if (failures.length > 0) {
@@ -481,8 +515,9 @@ export async function updateMultiplePlaylistPrivacy(playlistIds: string[], isPub
 
 export async function deleteMultiplePlaylists(playlistIds: string[]) {
   const headers = await getAuthHeaders()
-  
-  const promises = playlistIds.map(async (playlistId) => {
+
+  // Cap concurrency to avoid Spotify 429s on bulk deletes
+  const results = await runWithConcurrency(playlistIds, 3, async (playlistId) => {
     const response = await fetch(
       `https://api.spotify.com/v1/playlists/${playlistId}/followers`,
       {
@@ -490,15 +525,13 @@ export async function deleteMultiplePlaylists(playlistIds: string[]) {
         headers,
       }
     )
-    
+
     if (!response.ok) {
       throw new Error(`Failed to delete playlist ${playlistId}: ${response.statusText}`)
     }
-    
+
     return playlistId
   })
-  
-  const results = await Promise.allSettled(promises)
   const failures = results.filter((result): result is PromiseRejectedResult => result.status === 'rejected')
   
   if (failures.length > 0) {
