@@ -45,3 +45,6 @@ next-env.d.ts
 
 # old repository files
 /old-repo
+
+# local working plans
+/tasks
