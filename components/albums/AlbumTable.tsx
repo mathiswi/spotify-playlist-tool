@@ -1,9 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useTrackStore } from '@/stores/trackStore'
 import { SelectionTable } from '@/components/ui/SelectionTable'
-import { removeAlbumsFromLibrary } from '@/lib/actions/playlist-actions'
+import { removeAlbumsFromLibrary, getRecentlyPlayedContextMap } from '@/lib/actions/playlist-actions'
 import { useToast } from '@/hooks/use-toast'
 
 export function AlbumTable() {
@@ -20,6 +20,8 @@ export function AlbumTable() {
   
   const [trackLoading, setTrackLoading] = useState(false)
   const [removeLoading, setRemoveLoading] = useState(false)
+  const [lastPlayedMap, setLastPlayedMap] = useState<Record<string, string>>({})
+  const hasLoadedRecency = useRef(false)
   const { toast } = useToast()
 
   const albums = getAvailableAlbums()
@@ -30,6 +32,22 @@ export function AlbumTable() {
       loadSavedAlbums()
     }
   }, [savedAlbums.length, isLoading, loadSavedAlbums])
+
+  useEffect(() => {
+    if (albums.length === 0 || hasLoadedRecency.current) return
+    hasLoadedRecency.current = true
+    let cancelled = false
+    getRecentlyPlayedContextMap()
+      .then((maps) => {
+        if (!cancelled) setLastPlayedMap(maps.albums)
+      })
+      .catch(() => {
+        // Non-fatal: column just stays empty
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [albums.length])
 
   const handleSelectAll = () => {
     if (selectedAlbums.size === albums.length) {
@@ -90,7 +108,9 @@ export function AlbumTable() {
     name: album.name,
     images: album.images,
     trackCount: album.trackCount,
-    artists: album.artists
+    artists: album.artists,
+    addedAt: album.addedAt,
+    lastPlayed: lastPlayedMap[album.id] ?? null,
   }))
 
   return (

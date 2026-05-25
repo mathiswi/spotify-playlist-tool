@@ -9,6 +9,7 @@ export interface Album {
   images: { url: string; height: number | null; width: number | null }[]
   total_tracks: number
   trackCount: number // tracks available from selected playlists
+  addedAt: string
 }
 
 interface TrackStore {
@@ -183,7 +184,8 @@ export const useTrackStore = create<TrackStore>((set, get) => ({
         artists: album.artists,
         images: album.images,
         total_tracks: album.total_tracks,
-        trackCount: album.total_tracks // Use total_tracks directly, it's already in the response
+        trackCount: album.total_tracks, // Use total_tracks directly, it's already in the response
+        addedAt: album.added_at,
       }))
       
       set({ savedAlbums: albumsWithCounts, isLoading: false })
@@ -301,8 +303,7 @@ export const useTrackStore = create<TrackStore>((set, get) => ({
 
   // Album selection actions
   getAvailableAlbums: () => {
-    const { savedAlbums } = get()
-    return savedAlbums.sort((a, b) => a.name.localeCompare(b.name))
+    return get().savedAlbums
   },
 
   toggleAlbumSelection: (albumId) => {

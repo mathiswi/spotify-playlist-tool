@@ -2,7 +2,12 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useTrackStore } from '@/stores/trackStore'
-import { fetchUserPlaylists, updateMultiplePlaylistPrivacy, deleteMultiplePlaylists } from '@/lib/actions/playlist-actions'
+import {
+  fetchUserPlaylists,
+  updateMultiplePlaylistPrivacy,
+  deleteMultiplePlaylists,
+  getRecentlyPlayedContextMap,
+} from '@/lib/actions/playlist-actions'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/hooks/use-toast'
 import { SelectionTable } from '@/components/ui/SelectionTable'
@@ -22,8 +27,10 @@ export function PlaylistTable() {
   const [error, setError] = useState<string | null>(null)
   const [trackLoading, setTrackLoading] = useState(false)
   const [privacyLoading, setPrivacyLoading] = useState(false)
+  const [lastPlayedMap, setLastPlayedMap] = useState<Record<string, string>>({})
   const { toast } = useToast()
   const hasFetched = useRef(false)
+  const hasLoadedRecency = useRef(false)
 
   useEffect(() => {
     async function fetchPlaylists() {
@@ -67,6 +74,25 @@ export function PlaylistTable() {
     }
   }, [playlists.length, setPlaylists, toast])
 
+  useEffect(() => {
+    if (playlists.length === 0 || hasLoadedRecency.current) return
+    hasLoadedRecency.current = true
+
+    let cancelled = false
+
+    getRecentlyPlayedContextMap()
+      .then((maps) => {
+        if (!cancelled) setLastPlayedMap(maps.playlists)
+      })
+      .catch(() => {
+        // Non-fatal: column just stays empty
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [playlists])
+
   const handleSelectAll = () => {
     if (selectedPlaylists.size === playlists.length) {
       clearSelection()
@@ -87,7 +113,8 @@ export function PlaylistTable() {
     images: playlist.images,
     trackCount: playlist.tracks.total,
     owner: playlist.owner.display_name || playlist.owner.id,
-    isPublic: playlist.public
+    isPublic: playlist.public,
+    lastPlayed: lastPlayedMap[playlist.id] ?? null,
   }))
 
   const handleLoadTracks = async () => {

@@ -23,6 +23,8 @@ interface SelectionTableItem {
   owner?: string
   isPublic?: boolean | null
   artists?: { name: string }[]
+  lastPlayed?: string | null
+  addedAt?: string | null
 }
 
 interface SelectionTableProps {
@@ -41,8 +43,26 @@ interface SelectionTableProps {
   privacyLoading?: boolean
 }
 
-type SortField = 'name' | 'trackCount' | 'owner' | 'isPublic' | 'artists'
+type SortField = 'default' | 'name' | 'trackCount' | 'owner' | 'isPublic' | 'artists' | 'lastPlayed' | 'addedAt'
 type SortDirection = 'asc' | 'desc'
+
+function formatRelative(iso: string | null | undefined): string {
+  if (!iso) return '—'
+  const date = new Date(iso)
+  const diffMs = Date.now() - date.getTime()
+  const diffSec = Math.round(diffMs / 1000)
+  if (diffSec < 60) return 'just now'
+  const diffMin = Math.round(diffSec / 60)
+  if (diffMin < 60) return `${diffMin}m ago`
+  const diffHr = Math.round(diffMin / 60)
+  if (diffHr < 24) return `${diffHr}h ago`
+  const diffDay = Math.round(diffHr / 24)
+  if (diffDay < 30) return `${diffDay}d ago`
+  const diffMonth = Math.round(diffDay / 30)
+  if (diffMonth < 12) return `${diffMonth}mo ago`
+  const diffYear = Math.round(diffDay / 365)
+  return `${diffYear}y ago`
+}
 
 export function SelectionTable({
   items,
@@ -62,7 +82,7 @@ export function SelectionTable({
   const isPlaylistType = type === 'playlists'
   const allSelected = items.length > 0 && selectedItems.size === items.length
   
-  const [sortField, setSortField] = useState<SortField>('name')
+  const [sortField, setSortField] = useState<SortField>('default')
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
   
   const handleSort = (field: SortField) => {
@@ -75,10 +95,24 @@ export function SelectionTable({
   }
   
   const sortedItems = useMemo(() => {
+    if (sortField === 'default') return items
+
     const sorted = [...items].sort((a, b) => {
+      if (sortField === 'lastPlayed' || sortField === 'addedAt') {
+        const aRaw = sortField === 'lastPlayed' ? a.lastPlayed : a.addedAt
+        const bRaw = sortField === 'lastPlayed' ? b.lastPlayed : b.addedAt
+        // Nulls always sink to the bottom regardless of direction
+        if (!aRaw && !bRaw) return 0
+        if (!aRaw) return 1
+        if (!bRaw) return -1
+        if (aRaw < bRaw) return sortDirection === 'asc' ? -1 : 1
+        if (aRaw > bRaw) return sortDirection === 'asc' ? 1 : -1
+        return 0
+      }
+
       let aValue: string | number
       let bValue: string | number
-      
+
       switch (sortField) {
         case 'name':
           aValue = a.name.toLowerCase()
@@ -103,12 +137,12 @@ export function SelectionTable({
         default:
           return 0
       }
-      
+
       if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1
       if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1
       return 0
     })
-    
+
     return sorted
   }, [items, sortField, sortDirection])
   
@@ -147,14 +181,28 @@ export function SelectionTable({
     <div className="space-y-4">
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <Checkbox
-              checked={allSelected}
-              onCheckedChange={onSelectAll}
-            />
-            <span className="text-sm text-gray-600">
-              Select All ({selectedItems.size} of {items.length} selected)
-            </span>
+          <div className="flex items-center space-x-3">
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                checked={allSelected}
+                onCheckedChange={onSelectAll}
+              />
+              <span className="text-sm text-gray-600">
+                Select All ({selectedItems.size} of {items.length} selected)
+              </span>
+            </div>
+            {sortField !== 'default' && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSortField('default')
+                  setSortDirection('asc')
+                }}
+                className="text-xs text-blue-600 hover:text-blue-800 hover:underline"
+              >
+                Reset to Spotify order
+              </button>
+            )}
           </div>
           
           {selectedItems.size > 0 && (
@@ -262,13 +310,13 @@ export function SelectionTable({
               </TableHead>
               {isPlaylistType ? (
                 <>
-                  <TableHead 
+                  <TableHead
                     className="cursor-pointer hover:bg-gray-50"
                     onClick={() => handleSort('owner')}
                   >
                     Owner <SortIcon field="owner" />
                   </TableHead>
-                  <TableHead 
+                  <TableHead
                     className="w-24 cursor-pointer hover:bg-gray-50"
                     onClick={() => handleSort('isPublic')}
                   >
@@ -276,13 +324,29 @@ export function SelectionTable({
                   </TableHead>
                 </>
               ) : (
-                <TableHead 
-                  className="cursor-pointer hover:bg-gray-50"
-                  onClick={() => handleSort('artists')}
-                >
-                  Artist <SortIcon field="artists" />
-                </TableHead>
+                <>
+                  <TableHead
+                    className="cursor-pointer hover:bg-gray-50"
+                    onClick={() => handleSort('artists')}
+                  >
+                    Artist <SortIcon field="artists" />
+                  </TableHead>
+                  <TableHead
+                    className="w-28 cursor-pointer hover:bg-gray-50"
+                    onClick={() => handleSort('addedAt')}
+                    title="When this album was saved to your library"
+                  >
+                    Saved at <SortIcon field="addedAt" />
+                  </TableHead>
+                </>
               )}
+              <TableHead
+                className="w-28 cursor-pointer hover:bg-gray-50"
+                onClick={() => handleSort('lastPlayed')}
+                title="Last time a track from this item appeared in your last 50 played tracks"
+              >
+                Last played <SortIcon field="lastPlayed" />
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -321,8 +385,8 @@ export function SelectionTable({
                     <TableCell>{item.owner}</TableCell>
                     <TableCell>
                       <span className={`px-2 py-1 rounded-full text-xs ${
-                        item.isPublic 
-                          ? 'bg-green-100 text-green-800' 
+                        item.isPublic
+                          ? 'bg-green-100 text-green-800'
                           : 'bg-gray-100 text-gray-800'
                       }`}>
                         {item.isPublic ? 'Public' : 'Private'}
@@ -330,10 +394,24 @@ export function SelectionTable({
                     </TableCell>
                   </>
                 ) : (
-                  <TableCell>
-                    {item.artists?.map(artist => artist.name).join(', ')}
-                  </TableCell>
+                  <>
+                    <TableCell>
+                      {item.artists?.map(artist => artist.name).join(', ')}
+                    </TableCell>
+                    <TableCell
+                      className="text-sm text-gray-600"
+                      title={item.addedAt ?? undefined}
+                    >
+                      {formatRelative(item.addedAt)}
+                    </TableCell>
+                  </>
                 )}
+                <TableCell
+                  className="text-sm text-gray-600"
+                  title={item.lastPlayed ?? undefined}
+                >
+                  {formatRelative(item.lastPlayed)}
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>

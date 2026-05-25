@@ -97,26 +97,26 @@ export async function fetchUserPlaylists(): Promise<SpotifyPlaylist[]> {
   return playlists
 }
 
-export async function fetchUserSavedAlbums(): Promise<SpotifyAlbum[]> {
+export async function fetchUserSavedAlbums(): Promise<(SpotifyAlbum & { added_at: string })[]> {
   const headers = await getAuthHeaders()
   const limit = 50
-  
+
   // First request to get total count
   const firstResponse = await fetch(
     `https://api.spotify.com/v1/me/albums?limit=1`,
     { headers }
   )
-  
+
   if (!firstResponse.ok) {
     throw new Error(`Failed to fetch saved albums: ${firstResponse.statusText}`)
   }
-  
+
   const firstData: SavedAlbumsResponse = await firstResponse.json()
   const total = firstData.total
-  
+
   // Calculate how many requests we need
   const numRequests = Math.ceil(total / limit)
-  
+
   // Fetch all pages in parallel
   const promises = []
   for (let i = 0; i < numRequests; i++) {
@@ -129,14 +129,14 @@ export async function fetchUserSavedAlbums(): Promise<SpotifyAlbum[]> {
         })
     )
   }
-  
+
   const results = await Promise.all(promises)
-  const albums: SpotifyAlbum[] = []
-  
+  const albums: (SpotifyAlbum & { added_at: string })[] = []
+
   results.forEach(data => {
-    albums.push(...data.items.map(item => item.album))
+    albums.push(...data.items.map(item => ({ ...item.album, added_at: item.added_at })))
   })
-  
+
   return albums
 }
 
@@ -297,6 +297,55 @@ export async function fetchAlbumTracks(albumIds: string[]): Promise<EnrichedTrac
   })
   
   return tracks
+}
+
+interface RecentlyPlayedItem {
+  played_at: string
+  context: { type: string; uri: string } | null
+}
+
+export interface RecentlyPlayedMaps {
+  playlists: Record<string, string>
+  albums: Record<string, string>
+}
+
+export async function getRecentlyPlayedContextMap(): Promise<RecentlyPlayedMaps> {
+  const headers = await getAuthHeaders()
+
+  const response = await fetch(
+    'https://api.spotify.com/v1/me/player/recently-played?limit=50',
+    { headers }
+  )
+
+  // 403 = scope missing (user signed in before user-read-recently-played was added).
+  // 401 = token expired/invalid. Return empty maps so the column renders as — instead of erroring.
+  if (response.status === 403 || response.status === 401) {
+    return { playlists: {}, albums: {} }
+  }
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch recently played: ${response.statusText}`)
+  }
+
+  const data: { items: RecentlyPlayedItem[] } = await response.json()
+  const maps: RecentlyPlayedMaps = { playlists: {}, albums: {} }
+
+  for (const item of data.items) {
+    const ctx = item.context
+    if (!ctx) continue
+    const id = ctx.uri.split(':').pop()
+    if (!id) continue
+    const target =
+      ctx.type === 'playlist' ? maps.playlists :
+      ctx.type === 'album' ? maps.albums :
+      null
+    if (!target) continue
+    if (!target[id] || item.played_at > target[id]) {
+      target[id] = item.played_at
+    }
+  }
+
+  return maps
 }
 
 export async function fetchPlaylistTracks(playlistId: string): Promise<SpotifyPlaylistTrack[]> {
