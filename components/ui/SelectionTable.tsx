@@ -46,6 +46,23 @@ interface SelectionTableProps {
 type SortField = 'default' | 'name' | 'trackCount' | 'owner' | 'isPublic' | 'artists' | 'lastPlayed' | 'addedAt'
 type SortDirection = 'asc' | 'desc'
 
+function SortIcon({
+  field,
+  sortField,
+  sortDirection,
+}: {
+  field: SortField
+  sortField: SortField
+  sortDirection: SortDirection
+}) {
+  if (sortField !== field) return null
+  return sortDirection === 'asc' ? (
+    <ChevronUp className="inline w-4 h-4 ml-1" />
+  ) : (
+    <ChevronDown className="inline w-4 h-4 ml-1" />
+  )
+}
+
 function formatRelative(iso: string | null | undefined): string {
   if (!iso) return '—'
   const date = new Date(iso)
@@ -146,13 +163,6 @@ export function SelectionTable({
     return sorted
   }, [items, sortField, sortDirection])
   
-  const SortIcon = ({ field }: { field: SortField }) => {
-    if (sortField !== field) return null
-    return sortDirection === 'asc' ? 
-      <ChevronUp className="inline w-4 h-4 ml-1" /> : 
-      <ChevronDown className="inline w-4 h-4 ml-1" />
-  }
-
   if (isLoading) {
     return (
       <div className="flex justify-center p-8">
@@ -300,13 +310,13 @@ export function SelectionTable({
                 className="cursor-pointer hover:bg-gray-50"
                 onClick={() => handleSort('name')}
               >
-                Name <SortIcon field="name" />
+                Name <SortIcon field="name" sortField={sortField} sortDirection={sortDirection} />
               </TableHead>
               <TableHead 
                 className="w-20 cursor-pointer hover:bg-gray-50"
                 onClick={() => handleSort('trackCount')}
               >
-                Tracks <SortIcon field="trackCount" />
+                Tracks <SortIcon field="trackCount" sortField={sortField} sortDirection={sortDirection} />
               </TableHead>
               {isPlaylistType ? (
                 <>
@@ -314,13 +324,13 @@ export function SelectionTable({
                     className="cursor-pointer hover:bg-gray-50"
                     onClick={() => handleSort('owner')}
                   >
-                    Owner <SortIcon field="owner" />
+                    Owner <SortIcon field="owner" sortField={sortField} sortDirection={sortDirection} />
                   </TableHead>
                   <TableHead
                     className="w-24 cursor-pointer hover:bg-gray-50"
                     onClick={() => handleSort('isPublic')}
                   >
-                    Public <SortIcon field="isPublic" />
+                    Public <SortIcon field="isPublic" sortField={sortField} sortDirection={sortDirection} />
                   </TableHead>
                 </>
               ) : (
@@ -329,14 +339,14 @@ export function SelectionTable({
                     className="cursor-pointer hover:bg-gray-50"
                     onClick={() => handleSort('artists')}
                   >
-                    Artist <SortIcon field="artists" />
+                    Artist <SortIcon field="artists" sortField={sortField} sortDirection={sortDirection} />
                   </TableHead>
                   <TableHead
                     className="w-28 cursor-pointer hover:bg-gray-50"
                     onClick={() => handleSort('addedAt')}
                     title="When this album was saved to your library"
                   >
-                    Saved at <SortIcon field="addedAt" />
+                    Saved at <SortIcon field="addedAt" sortField={sortField} sortDirection={sortDirection} />
                   </TableHead>
                 </>
               )}
@@ -345,7 +355,7 @@ export function SelectionTable({
                 onClick={() => handleSort('lastPlayed')}
                 title="Last time a track from this item appeared in your last 50 played tracks"
               >
-                Last played <SortIcon field="lastPlayed" />
+                Last played <SortIcon field="lastPlayed" sortField={sortField} sortDirection={sortDirection} />
               </TableHead>
             </TableRow>
           </TableHeader>
