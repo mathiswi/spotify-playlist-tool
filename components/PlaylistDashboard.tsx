@@ -52,7 +52,7 @@ export function PlaylistDashboard() {
           <div className="bg-white rounded-lg p-6 shadow-sm">
             <h2 className="text-xl font-semibold mb-4">Search Spotify</h2>
             <p className="text-gray-600 mb-6">
-              Search for tracks and albums in Spotify&apos;s entire catalog to add to your selection.
+              Search for tracks, albums, or playlists in Spotify&apos;s entire catalog to add to your selection.
             </p>
             <SearchManager />
           </div>

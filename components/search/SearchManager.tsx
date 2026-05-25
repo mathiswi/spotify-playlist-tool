@@ -29,6 +29,7 @@ export function SearchManager() {
     tracks?: { items: SpotifyTrack[] }
     albums?: { items: SpotifyAlbum[] }
     playlists?: { items: SpotifyPlaylist[] }
+    inaccessiblePlaylistCount?: number
   } | null>(null)
   const [isSearching, setIsSearching] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -136,23 +137,25 @@ export function SearchManager() {
       {searchResults && searchedTypes.length > 0 && (
         <div className="space-y-4">
           <Tabs defaultValue={searchedTypes[0]} className="w-full">
-            <TabsList className={`grid w-full ${gridColsClass}`}>
-              {searchedTypes.includes('track') && (
-                <TabsTrigger value="track">
-                  Tracks ({searchResults.tracks?.items?.length || 0})
-                </TabsTrigger>
-              )}
-              {searchedTypes.includes('album') && (
-                <TabsTrigger value="album">
-                  Albums ({searchResults.albums?.items?.length || 0})
-                </TabsTrigger>
-              )}
-              {searchedTypes.includes('playlist') && (
-                <TabsTrigger value="playlist">
-                  Playlists ({searchResults.playlists?.items?.length || 0})
-                </TabsTrigger>
-              )}
-            </TabsList>
+            {searchedTypes.length > 1 && (
+              <TabsList className={`grid w-full ${gridColsClass}`}>
+                {searchedTypes.includes('track') && (
+                  <TabsTrigger value="track">
+                    Tracks ({searchResults.tracks?.items?.length || 0})
+                  </TabsTrigger>
+                )}
+                {searchedTypes.includes('album') && (
+                  <TabsTrigger value="album">
+                    Albums ({searchResults.albums?.items?.length || 0})
+                  </TabsTrigger>
+                )}
+                {searchedTypes.includes('playlist') && (
+                  <TabsTrigger value="playlist">
+                    Playlists ({searchResults.playlists?.items?.length || 0})
+                  </TabsTrigger>
+                )}
+              </TabsList>
+            )}
 
             {searchedTypes.includes('track') && (
               <TabsContent value="track" className="mt-4">
@@ -181,7 +184,18 @@ export function SearchManager() {
             )}
 
             {searchedTypes.includes('playlist') && (
-              <TabsContent value="playlist" className="mt-4">
+              <TabsContent value="playlist" className="mt-4 space-y-3">
+                {searchResults.inaccessiblePlaylistCount !== undefined &&
+                  searchResults.inaccessiblePlaylistCount > 0 && (
+                    <div className="text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded px-3 py-2">
+                      {searchResults.inaccessiblePlaylistCount} Spotify-curated{' '}
+                      {searchResults.inaccessiblePlaylistCount === 1 ? 'playlist is' : 'playlists are'}{' '}
+                      hidden — third-party apps can&apos;t access editorial or
+                      algorithmic playlists (Today&apos;s Top Hits, Discover
+                      Weekly, daily mixes, etc.) since Spotify&apos;s Nov 2024
+                      API changes.
+                    </div>
+                  )}
                 {searchResults.playlists?.items && searchResults.playlists.items.length > 0 ? (
                   <SearchResults
                     type="playlists"

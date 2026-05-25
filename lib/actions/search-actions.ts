@@ -42,6 +42,10 @@ interface SearchResponse {
     previous: string | null
     total: number
   }
+  // Count of Spotify-curated (editorial/algorithmic) playlists returned as
+  // null by the search API. Third-party apps can't read these since
+  // Nov 2024, so we drop them but surface the count to the user.
+  inaccessiblePlaylistCount?: number
 }
 
 export async function searchSpotify(query: string, types: string[] = ['track', 'album'], limit: number = 20): Promise<SearchResponse> {
@@ -61,11 +65,16 @@ export async function searchSpotify(query: string, types: string[] = ['track', '
 
   const data: SearchResponse = await response.json()
 
-  // Spotify occasionally returns `null` entries in playlist search results.
+  // Since Nov 2024, Spotify returns its editorial/algorithmic playlists
+  // (Anime Now, Today's Top Hits, Discover Weekly, daily mixes…) as `null`
+  // for third-party apps. Strip them so the UI doesn't crash, and report
+  // the count so the user knows why expected results may be missing.
   if (data.playlists?.items) {
+    const before = data.playlists.items.length
     data.playlists.items = data.playlists.items.filter(
       (item): item is SpotifyPlaylist => item !== null
     )
+    data.inaccessiblePlaylistCount = before - data.playlists.items.length
   }
 
   return data
