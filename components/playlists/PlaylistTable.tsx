@@ -9,9 +9,11 @@ import {
   getRecentlyPlayedContextMap,
 } from '@/lib/actions/playlist-actions'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { useToast } from '@/hooks/use-toast'
 import { SelectionTable } from '@/components/ui/SelectionTable'
 import { signIn } from 'next-auth/react'
+import { Search } from 'lucide-react'
 
 export function PlaylistTable() {
   const {
@@ -28,6 +30,7 @@ export function PlaylistTable() {
   const [trackLoading, setTrackLoading] = useState(false)
   const [privacyLoading, setPrivacyLoading] = useState(false)
   const [lastPlayedMap, setLastPlayedMap] = useState<Record<string, string>>({})
+  const [searchQuery, setSearchQuery] = useState('')
   const { toast } = useToast()
   const hasFetched = useRef(false)
   const hasLoadedRecency = useRef(false)
@@ -93,11 +96,32 @@ export function PlaylistTable() {
     }
   }, [playlists])
 
+  const normalizedQuery = searchQuery.trim().toLowerCase()
+  const filteredPlaylists = normalizedQuery
+    ? playlists.filter(playlist => {
+        const ownerName = playlist.owner?.display_name || playlist.owner?.id || ''
+        return (
+          playlist.name.toLowerCase().includes(normalizedQuery) ||
+          (playlist.description ?? '').toLowerCase().includes(normalizedQuery) ||
+          ownerName.toLowerCase().includes(normalizedQuery)
+        )
+      })
+    : playlists
+
   const handleSelectAll = () => {
-    if (selectedPlaylists.size === playlists.length) {
-      clearSelection()
+    const allFilteredSelected =
+      filteredPlaylists.length > 0 &&
+      filteredPlaylists.every(p => selectedPlaylists.has(p.id))
+
+    if (allFilteredSelected) {
+      // Deselect just the filtered ones
+      filteredPlaylists.forEach(playlist => {
+        if (selectedPlaylists.has(playlist.id)) {
+          togglePlaylistSelection(playlist.id)
+        }
+      })
     } else {
-      playlists.forEach(playlist => {
+      filteredPlaylists.forEach(playlist => {
         if (!selectedPlaylists.has(playlist.id)) {
           togglePlaylistSelection(playlist.id)
         }
@@ -105,8 +129,8 @@ export function PlaylistTable() {
     }
   }
 
-  // Transform playlists for SelectionTable
-  const playlistItems = playlists.map(playlist => ({
+  // Transform filtered playlists for SelectionTable
+  const playlistItems = filteredPlaylists.map(playlist => ({
     id: playlist.id,
     name: playlist.name,
     description: playlist.description,
@@ -272,20 +296,37 @@ export function PlaylistTable() {
   }
 
   return (
-    <SelectionTable
-      items={playlistItems}
-      selectedItems={selectedPlaylists}
-      isLoading={loading}
-      type="playlists"
-      onToggleSelection={togglePlaylistSelection}
-      onSelectAll={handleSelectAll}
-      onClearSelection={clearSelection}
-      onLoadTracks={handleLoadTracks}
-      trackLoading={trackLoading}
-      onMakePrivate={handleMakePrivate}
-      onMakePublic={handleMakePublic}
-      onDeleteItems={handleDeletePlaylists}
-      privacyLoading={privacyLoading}
-    />
+    <div className="space-y-4">
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+        <Input
+          placeholder="Search playlists by name, description, or owner..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="pl-9"
+          disabled={loading}
+        />
+      </div>
+      {searchQuery && !loading && (
+        <p className="text-sm text-gray-500">
+          Showing {filteredPlaylists.length} of {playlists.length} playlists
+        </p>
+      )}
+      <SelectionTable
+        items={playlistItems}
+        selectedItems={selectedPlaylists}
+        isLoading={loading}
+        type="playlists"
+        onToggleSelection={togglePlaylistSelection}
+        onSelectAll={handleSelectAll}
+        onClearSelection={clearSelection}
+        onLoadTracks={handleLoadTracks}
+        trackLoading={trackLoading}
+        onMakePrivate={handleMakePrivate}
+        onMakePublic={handleMakePublic}
+        onDeleteItems={handleDeletePlaylists}
+        privacyLoading={privacyLoading}
+      />
+    </div>
   )
 }

@@ -3,8 +3,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { useTrackStore } from '@/stores/trackStore'
 import { SelectionTable } from '@/components/ui/SelectionTable'
+import { Input } from '@/components/ui/input'
 import { removeAlbumsFromLibrary, getRecentlyPlayedContextMap } from '@/lib/actions/playlist-actions'
 import { useToast } from '@/hooks/use-toast'
+import { Search } from 'lucide-react'
 
 export function AlbumTable() {
   // Only subscribe to album-related state to prevent unnecessary re-renders
@@ -13,18 +15,26 @@ export function AlbumTable() {
   const isLoading = useTrackStore(state => state.isLoading)
   const getAvailableAlbums = useTrackStore(state => state.getAvailableAlbums)
   const toggleAlbumSelection = useTrackStore(state => state.toggleAlbumSelection)
-  const selectAllAlbums = useTrackStore(state => state.selectAllAlbums)
   const clearAlbumSelection = useTrackStore(state => state.clearAlbumSelection)
   const loadSavedAlbums = useTrackStore(state => state.loadSavedAlbums)
   const loadTracksFromSelectedAlbums = useTrackStore(state => state.loadTracksFromSelectedAlbums)
-  
+
   const [trackLoading, setTrackLoading] = useState(false)
   const [removeLoading, setRemoveLoading] = useState(false)
   const [lastPlayedMap, setLastPlayedMap] = useState<Record<string, string>>({})
+  const [searchQuery, setSearchQuery] = useState('')
   const hasLoadedRecency = useRef(false)
   const { toast } = useToast()
 
   const albums = getAvailableAlbums()
+
+  const normalizedQuery = searchQuery.trim().toLowerCase()
+  const filteredAlbums = normalizedQuery
+    ? albums.filter(album =>
+        album.name.toLowerCase().includes(normalizedQuery) ||
+        album.artists.some(a => a.name.toLowerCase().includes(normalizedQuery))
+      )
+    : albums
 
   useEffect(() => {
     // Load saved albums if not already loaded
@@ -50,10 +60,18 @@ export function AlbumTable() {
   }, [albums.length])
 
   const handleSelectAll = () => {
-    if (selectedAlbums.size === albums.length) {
-      clearAlbumSelection()
+    const allFilteredSelected =
+      filteredAlbums.length > 0 &&
+      filteredAlbums.every(a => selectedAlbums.has(a.id))
+
+    if (allFilteredSelected) {
+      filteredAlbums.forEach(album => {
+        if (selectedAlbums.has(album.id)) toggleAlbumSelection(album.id)
+      })
     } else {
-      selectAllAlbums()
+      filteredAlbums.forEach(album => {
+        if (!selectedAlbums.has(album.id)) toggleAlbumSelection(album.id)
+      })
     }
   }
 
@@ -102,8 +120,8 @@ export function AlbumTable() {
     }
   }
 
-  // Transform albums for SelectionTable
-  const albumItems = albums.map(album => ({
+  // Transform filtered albums for SelectionTable
+  const albumItems = filteredAlbums.map(album => ({
     id: album.id,
     name: album.name,
     images: album.images,
@@ -114,18 +132,35 @@ export function AlbumTable() {
   }))
 
   return (
-    <SelectionTable
-      items={albumItems}
-      selectedItems={selectedAlbums}
-      isLoading={isLoading}
-      type="albums"
-      onToggleSelection={toggleAlbumSelection}
-      onSelectAll={handleSelectAll}
-      onClearSelection={clearAlbumSelection}
-      onLoadTracks={handleLoadTracks}
-      trackLoading={trackLoading}
-      onDeleteItems={handleRemoveAlbums}
-      privacyLoading={removeLoading}
-    />
+    <div className="space-y-4">
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+        <Input
+          placeholder="Search albums by name or artist..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="pl-9"
+          disabled={isLoading}
+        />
+      </div>
+      {searchQuery && !isLoading && (
+        <p className="text-sm text-gray-500">
+          Showing {filteredAlbums.length} of {albums.length} albums
+        </p>
+      )}
+      <SelectionTable
+        items={albumItems}
+        selectedItems={selectedAlbums}
+        isLoading={isLoading}
+        type="albums"
+        onToggleSelection={toggleAlbumSelection}
+        onSelectAll={handleSelectAll}
+        onClearSelection={clearAlbumSelection}
+        onLoadTracks={handleLoadTracks}
+        trackLoading={trackLoading}
+        onDeleteItems={handleRemoveAlbums}
+        privacyLoading={removeLoading}
+      />
+    </div>
   )
 }

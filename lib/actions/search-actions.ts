@@ -1,7 +1,7 @@
 'use server'
 
 import { auth } from '@/auth'
-import { SpotifyTrack, SpotifyAlbum } from '@/types/spotify'
+import { SpotifyTrack, SpotifyAlbum, SpotifyPlaylist, SpotifyPlaylistTrack } from '@/types/spotify'
 
 async function getAuthHeaders() {
   const session = await auth()
@@ -33,6 +33,15 @@ interface SearchResponse {
     previous: string | null
     total: number
   }
+  playlists?: {
+    href: string
+    items: SpotifyPlaylist[]
+    limit: number
+    next: string | null
+    offset: number
+    previous: string | null
+    total: number
+  }
 }
 
 export async function searchSpotify(query: string, types: string[] = ['track', 'album'], limit: number = 20): Promise<SearchResponse> {
@@ -49,8 +58,17 @@ export async function searchSpotify(query: string, types: string[] = ['track', '
   if (!response.ok) {
     throw new Error(`Failed to search: ${response.statusText}`)
   }
-  
-  return response.json()
+
+  const data: SearchResponse = await response.json()
+
+  // Spotify occasionally returns `null` entries in playlist search results.
+  if (data.playlists?.items) {
+    data.playlists.items = data.playlists.items.filter(
+      (item): item is SpotifyPlaylist => item !== null
+    )
+  }
+
+  return data
 }
 
 export async function getAlbumTracks(albumId: string): Promise<SpotifyTrack[]> {
@@ -110,6 +128,40 @@ export async function getAlbumTracks(albumId: string): Promise<SpotifyTrack[]> {
     
     tracks.push(...fullTracks)
     
+    if (!data.next) break
+    offset += limit
+  }
+
+  return tracks
+}
+
+export async function getPlaylistTracks(playlistId: string): Promise<SpotifyTrack[]> {
+  const headers = await getAuthHeaders()
+  const tracks: SpotifyTrack[] = []
+  let offset = 0
+  const limit = 100
+
+  while (true) {
+    const response = await fetch(
+      `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=${limit}&offset=${offset}`,
+      { headers }
+    )
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch playlist tracks: ${response.statusText}`)
+    }
+
+    const data: {
+      items: SpotifyPlaylistTrack[]
+      next: string | null
+    } = await response.json()
+
+    for (const item of data.items) {
+      if (!item?.track) continue
+      if (item.is_local) continue
+      tracks.push(item.track)
+    }
+
     if (!data.next) break
     offset += limit
   }

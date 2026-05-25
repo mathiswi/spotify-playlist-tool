@@ -3,15 +3,15 @@
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
-import { SpotifyTrack, SpotifyAlbum } from '@/types/spotify'
+import { SpotifyTrack, SpotifyAlbum, SpotifyPlaylist } from '@/types/spotify'
 import { useTrackStore } from '@/stores/trackStore'
-import { getAlbumTracks, addSearchTracksToSelection } from '@/lib/actions/search-actions'
-import { Plus, Music } from 'lucide-react'
+import { getAlbumTracks, addSearchTracksToSelection, getPlaylistTracks } from '@/lib/actions/search-actions'
+import { Plus, Music, ListMusic } from 'lucide-react'
 import Image from 'next/image'
 
 interface SearchResultsProps {
-  type: 'tracks' | 'albums'
-  items: SpotifyTrack[] | SpotifyAlbum[]
+  type: 'tracks' | 'albums' | 'playlists'
+  items: SpotifyTrack[] | SpotifyAlbum[] | SpotifyPlaylist[]
 }
 
 export function SearchResults({ type, items }: SearchResultsProps) {
@@ -53,16 +53,27 @@ export function SearchResults({ type, items }: SearchResultsProps) {
         const trackIds = Array.from(selectedItems)
         const tracks = await addSearchTracksToSelection(trackIds)
         addSearchedTracks(tracks)
-      } else {
+      } else if (type === 'albums') {
         // For albums, fetch all tracks from selected albums
         const albumIds = Array.from(selectedItems)
         const allTracks: SpotifyTrack[] = []
-        
+
         for (const albumId of albumIds) {
           const albumTracks = await getAlbumTracks(albumId)
           allTracks.push(...albumTracks)
         }
-        
+
+        addSearchedTracks(allTracks)
+      } else {
+        // For playlists, fetch all tracks from selected playlists
+        const playlistIds = Array.from(selectedItems)
+        const allTracks: SpotifyTrack[] = []
+
+        for (const playlistId of playlistIds) {
+          const playlistTracks = await getPlaylistTracks(playlistId)
+          allTracks.push(...playlistTracks)
+        }
+
         addSearchedTracks(allTracks)
       }
       
@@ -164,68 +175,138 @@ export function SearchResults({ type, items }: SearchResultsProps) {
     )
   }
 
-  // Albums view
-  const albums = items as SpotifyAlbum[]
-  
+  if (type === 'albums') {
+    const albums = items as SpotifyAlbum[]
+
+    return (
+      <div className="space-y-4">
+        {/* Selection controls */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Checkbox
+              checked={selectedItems.size === albums.length && albums.length > 0}
+              onCheckedChange={toggleAll}
+            />
+            <span className="text-sm text-gray-600">
+              {selectedItems.size} of {albums.length} selected
+            </span>
+          </div>
+
+          <Button
+            onClick={handleAddToSelection}
+            disabled={selectedItems.size === 0 || isAdding}
+            size="sm"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            {isAdding ? 'Adding...' : `Add ${selectedItems.size} Album${selectedItems.size !== 1 ? 's' : ''}`}
+          </Button>
+        </div>
+
+        {/* Album grid */}
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          {albums.map((album) => (
+            <div
+              key={album.id}
+              className={`border rounded-lg p-4 cursor-pointer transition-all ${
+                selectedItems.has(album.id) ? 'border-blue-500 bg-blue-50' : 'hover:border-gray-300'
+              }`}
+              onClick={() => toggleSelection(album.id)}
+            >
+              <div className="aspect-square relative mb-3">
+                {album.images?.[0] ? (
+                  <Image
+                    src={album.images[0].url}
+                    alt={album.name}
+                    fill
+                    className="object-cover rounded"
+                  />
+                ) : (
+                  <div className="w-full h-full bg-gray-200 rounded flex items-center justify-center">
+                    <Music className="w-12 h-12 text-gray-400" />
+                  </div>
+                )}
+                {selectedItems.has(album.id) && (
+                  <div className="absolute top-2 right-2 bg-blue-500 text-white rounded-full p-1">
+                    <Plus className="w-4 h-4" />
+                  </div>
+                )}
+              </div>
+              <h4 className="font-medium text-sm truncate">{album.name}</h4>
+              <p className="text-xs text-gray-600 truncate">
+                {album.artists.map(a => a.name).join(', ')}
+              </p>
+              <p className="text-xs text-gray-500 mt-1">
+                {album.total_tracks} tracks • {album.release_date?.split('-')[0]}
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  // Playlists view
+  const playlists = items as SpotifyPlaylist[]
+
   return (
     <div className="space-y-4">
       {/* Selection controls */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Checkbox
-            checked={selectedItems.size === albums.length && albums.length > 0}
+            checked={selectedItems.size === playlists.length && playlists.length > 0}
             onCheckedChange={toggleAll}
           />
           <span className="text-sm text-gray-600">
-            {selectedItems.size} of {albums.length} selected
+            {selectedItems.size} of {playlists.length} selected
           </span>
         </div>
-        
+
         <Button
           onClick={handleAddToSelection}
           disabled={selectedItems.size === 0 || isAdding}
           size="sm"
         >
           <Plus className="w-4 h-4 mr-2" />
-          {isAdding ? 'Adding...' : `Add ${selectedItems.size} Album${selectedItems.size !== 1 ? 's' : ''}`}
+          {isAdding ? 'Adding...' : `Add ${selectedItems.size} Playlist${selectedItems.size !== 1 ? 's' : ''}`}
         </Button>
       </div>
 
-      {/* Album grid */}
+      {/* Playlist grid */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-        {albums.map((album) => (
+        {playlists.map((playlist) => (
           <div
-            key={album.id}
+            key={playlist.id}
             className={`border rounded-lg p-4 cursor-pointer transition-all ${
-              selectedItems.has(album.id) ? 'border-blue-500 bg-blue-50' : 'hover:border-gray-300'
+              selectedItems.has(playlist.id) ? 'border-blue-500 bg-blue-50' : 'hover:border-gray-300'
             }`}
-            onClick={() => toggleSelection(album.id)}
+            onClick={() => toggleSelection(playlist.id)}
           >
             <div className="aspect-square relative mb-3">
-              {album.images?.[0] ? (
+              {playlist.images?.[0] ? (
                 <Image
-                  src={album.images[0].url}
-                  alt={album.name}
+                  src={playlist.images[0].url}
+                  alt={playlist.name}
                   fill
                   className="object-cover rounded"
                 />
               ) : (
                 <div className="w-full h-full bg-gray-200 rounded flex items-center justify-center">
-                  <Music className="w-12 h-12 text-gray-400" />
+                  <ListMusic className="w-12 h-12 text-gray-400" />
                 </div>
               )}
-              {selectedItems.has(album.id) && (
+              {selectedItems.has(playlist.id) && (
                 <div className="absolute top-2 right-2 bg-blue-500 text-white rounded-full p-1">
                   <Plus className="w-4 h-4" />
                 </div>
               )}
             </div>
-            <h4 className="font-medium text-sm truncate">{album.name}</h4>
+            <h4 className="font-medium text-sm truncate">{playlist.name}</h4>
             <p className="text-xs text-gray-600 truncate">
-              {album.artists.map(a => a.name).join(', ')}
+              {playlist.owner?.display_name || playlist.owner?.id}
             </p>
             <p className="text-xs text-gray-500 mt-1">
-              {album.total_tracks} tracks • {album.release_date?.split('-')[0]}
+              {playlist.tracks?.total ?? 0} tracks
             </p>
           </div>
         ))}
