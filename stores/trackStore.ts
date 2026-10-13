@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { persist, createJSONStorage } from 'zustand/middleware'
 import { SpotifyPlaylist, EnrichedTrack, SpotifyTrack } from '@/types/spotify'
 import { fetchPlaylistTracks, fetchMultiplePlaylistTracks, fetchUserSavedAlbums, fetchAlbumTracks } from '@/lib/actions/playlist-actions'
 
@@ -61,7 +62,26 @@ interface TrackStore {
   addSearchedTracks: (tracks: SpotifyTrack[]) => void
 }
 
-export const useTrackStore = create<TrackStore>((set, get) => ({
+// localStorage isn't available during SSR, so fall back to a no-op storage on the server.
+const selectionStorage = createJSONStorage(() =>
+  typeof window !== 'undefined'
+    ? window.localStorage
+    : {
+        getItem: () => null,
+        setItem: () => {},
+        removeItem: () => {},
+      }
+)
+
+interface PersistedSelection {
+  selectedPlaylists?: string[]
+  selectedAlbums?: string[]
+  selectedTracks?: string[]
+}
+
+export const useTrackStore = create<TrackStore>()(
+  persist(
+    (set, get) => ({
   selectedPlaylists: new Set(),
   selectedAlbums: new Set(),
   playlists: [],
@@ -417,4 +437,27 @@ export const useTrackStore = create<TrackStore>((set, get) => ({
       selectedTracks: newSelectedTracks
     })
   },
-}))
+    }),
+    {
+      name: 'spotify-playlist-tool-selection',
+      storage: selectionStorage,
+      // Hydrate manually (in PlaylistDashboard) to avoid SSR hydration mismatch.
+      skipHydration: true,
+      // Sets aren't JSON-serializable, so persist them as arrays.
+      partialize: (state): PersistedSelection => ({
+        selectedPlaylists: Array.from(state.selectedPlaylists),
+        selectedAlbums: Array.from(state.selectedAlbums),
+        selectedTracks: Array.from(state.selectedTracks),
+      }),
+      merge: (persistedState, currentState) => {
+        const p = persistedState as PersistedSelection
+        return {
+          ...currentState,
+          selectedPlaylists: new Set(p.selectedPlaylists ?? []),
+          selectedAlbums: new Set(p.selectedAlbums ?? []),
+          selectedTracks: new Set(p.selectedTracks ?? []),
+        }
+      },
+    }
+  )
+)

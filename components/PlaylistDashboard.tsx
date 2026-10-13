@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect } from 'react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { PlaylistTable } from '@/components/playlists/PlaylistTable'
 import { AlbumTable } from '@/components/albums/AlbumTable'
@@ -9,6 +10,11 @@ import { useTrackStore } from '@/stores/trackStore'
 
 export function PlaylistDashboard() {
   const { selectedTracks } = useTrackStore()
+
+  // Restore persisted selection (playlists/albums/tracks) on mount.
+  useEffect(() => {
+    useTrackStore.persist.rehydrate()
+  }, [])
 
   return (
     <div className="w-full">
