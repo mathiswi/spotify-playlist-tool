@@ -2,6 +2,7 @@
 
 import { auth } from '@/auth'
 import { SpotifyTrack, SpotifyAlbum, SpotifyPlaylist, SpotifyPlaylistTrack } from '@/types/spotify'
+import { parseSongListWithRules, type SongQuery, type SongListParseResult } from '@/lib/song-list'
 
 async function getAuthHeaders() {
   const session = await auth()
@@ -199,4 +200,135 @@ export async function addSearchTracksToSelection(trackIds: string[]): Promise<Sp
   }
   
   return tracks
+}
+
+export interface SongMatch {
+  song: string
+  artist: string
+  track: SpotifyTrack | null
+}
+
+/**
+ * Parses a pasted song list into (song, artist) pairs. Uses Gemini when
+ * GEMINI_API_KEY is configured and the call succeeds, otherwise falls back to
+ * the deterministic rule parser. The feature works with or without a key.
+ */
+export async function parseSongList(text: string): Promise<SongListParseResult & { usedGemini: boolean }> {
+  if (process.env.GEMINI_API_KEY) {
+    try {
+      const result = await parseWithGemini(text)
+      if (result.queries.length > 0) {
+        return { ...result, usedGemini: true }
+      }
+    } catch (err) {
+      console.error('Gemini song parsing failed, falling back to rules:', err)
+    }
+  }
+
+  return { ...parseSongListWithRules(text), usedGemini: false }
+}
+
+async function parseWithGemini(text: string): Promise<SongListParseResult> {
+  const model = process.env.GEMINI_MODEL ?? 'gemini-3.1-flash-lite'
+  const apiKey = process.env.GEMINI_API_KEY!
+
+  const prompt = `Parse this list of songs into JSON. Each line describes one or more songs and their artist.
+
+Formats used:
+- "Song A und Song B von Artist"  (German: "und" = and, "von" = by)
+- "Song - Artist"
+
+Rules:
+- Extract every song title and its artist into separate fields.
+- Output JSON only, no markdown fences, no commentary.
+- Ignore lines that are notes or not recognizable songs; put them in "ignored".
+- Fix obvious typos in artist names, but do not invent songs.
+
+Response schema:
+{"songs":[{"song":"...","artist":"..."}],"ignored":["..."]}
+
+Input:
+${text}`
+
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': apiKey,
+      },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          responseMimeType: 'application/json',
+          temperature: 0,
+        },
+      }),
+    }
+  )
+
+  if (!response.ok) {
+    throw new Error(`Gemini request failed: ${response.status} ${response.statusText}`)
+  }
+
+  const data = await response.json()
+  const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text
+  if (!raw) {
+    throw new Error('Gemini returned an empty response')
+  }
+
+  return parseGeminiJson(raw)
+}
+
+function parseGeminiJson(raw: string): SongListParseResult {
+  const cleaned = raw
+    .replace(/```json/gi, '')
+    .replace(/```/g, '')
+    .trim()
+
+  const parsed: { songs?: unknown; ignored?: unknown } = JSON.parse(cleaned)
+  const songs = Array.isArray(parsed?.songs) ? parsed.songs : []
+
+  const queries: SongQuery[] = []
+  for (const item of songs) {
+    const candidate = item as { song?: unknown; artist?: unknown } | null | undefined
+    if (candidate && typeof candidate.song === 'string' && typeof candidate.artist === 'string') {
+      const song = candidate.song.trim()
+      const artist = candidate.artist.trim()
+      if (song && artist) {
+        queries.push({ song, artist })
+      }
+    }
+  }
+
+  const ignored = Array.isArray(parsed?.ignored) ? parsed.ignored : []
+  const skipped = ignored.filter((x): x is string => typeof x === 'string')
+
+  return { queries, skipped }
+}
+
+/**
+ * Resolves each (song, artist) query to its best matching Spotify track via
+ * the search API. Returns the top track per query, or null when none found.
+ */
+export async function searchTracksByTitleArtist(queries: SongQuery[]): Promise<SongMatch[]> {
+  const headers = await getAuthHeaders()
+
+  return Promise.all(
+    queries.map(async (query): Promise<SongMatch> => {
+      const q = `track:${query.song} artist:${query.artist}`
+      try {
+        const response = await fetch(
+          `https://api.spotify.com/v1/search?q=${encodeURIComponent(q)}&type=track&limit=1`,
+          { headers }
+        )
+        if (!response.ok) return { ...query, track: null }
+        const data = await response.json()
+        return { ...query, track: data?.tracks?.items?.[0] ?? null }
+      } catch {
+        return { ...query, track: null }
+      }
+    })
+  )
 }

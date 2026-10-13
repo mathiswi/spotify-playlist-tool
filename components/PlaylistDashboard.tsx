@@ -6,6 +6,7 @@ import { PlaylistTable } from '@/components/playlists/PlaylistTable'
 import { AlbumTable } from '@/components/albums/AlbumTable'
 import { TrackManager } from '@/components/tracks/TrackManager'
 import { SearchManager } from '@/components/search/SearchManager'
+import { SongImport } from '@/components/search/SongImport'
 import { useTrackStore } from '@/stores/trackStore'
 
 export function PlaylistDashboard() {
@@ -61,6 +62,14 @@ export function PlaylistDashboard() {
               Search for tracks, albums, or playlists in Spotify&apos;s entire catalog to add to your selection.
             </p>
             <SearchManager />
+          </div>
+          <div className="bg-white rounded-lg p-6 shadow-sm">
+            <h2 className="text-xl font-semibold mb-4">Bulk import songs</h2>
+            <p className="text-gray-600 mb-6">
+              Paste a list of songs to add them all at once. Each line can be
+              &quot;song - artist&quot; or &quot;song und song von artist&quot;.
+            </p>
+            <SongImport />
           </div>
         </TabsContent>
         
