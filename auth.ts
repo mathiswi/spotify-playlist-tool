@@ -6,7 +6,7 @@ const scope = "user-read-email user-read-private playlist-read-private playlist-
 export const { handlers, auth, signIn, signOut } = NextAuth({
   providers: [
     Spotify({
-      authorization: `https://accounts.spotify.com/authorize?scope=${scope}`,
+      authorization: `https://accounts.spotify.com/authorize?scope=${scope}&show_dialog=true`,
     })
   ],
   trustHost: true,
