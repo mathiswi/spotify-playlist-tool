@@ -1,6 +1,7 @@
 import { auth } from '@/auth'
 import { redirect } from 'next/navigation'
 import { PlaylistDashboard } from '@/components/PlaylistDashboard'
+import { SignOut } from '@/components/sign-out'
 
 export default async function DashboardPage() {
   const session = await auth()
@@ -19,12 +20,17 @@ export default async function DashboardPage() {
     <div className="min-h-screen bg-gray-50">
       <div className="container mx-auto px-4 py-8">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">
-            Spotify Playlist Manager
-          </h1>
-          <p className="text-gray-600 mt-2">
-            Select playlists, aggregate tracks, and create new playlists with advanced filtering
-          </p>
+          <div className="flex items-start justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">
+                Spotify Playlist Manager
+              </h1>
+              <p className="text-gray-600 mt-2">
+                Select playlists, aggregate tracks, and create new playlists with advanced filtering
+              </p>
+            </div>
+            <SignOut />
+          </div>
         </div>
         
         <PlaylistDashboard />
