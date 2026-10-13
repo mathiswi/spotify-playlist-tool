@@ -66,6 +66,36 @@ export async function searchSpotify(query: string, types: string[] = ['track', '
 
   const data: SearchResponse = await response.json()
 
+  // Typing an artist name should also surface that artist's albums, not just
+  // album-title matches. Spotify's default album search is title-biased, so run
+  // a second artist-scoped query and merge (artist matches first, deduped).
+  if (types.includes('album')) {
+    try {
+      const artistAlbums = await searchAlbumsByArtist(query, limit, headers)
+      if (artistAlbums.length > 0) {
+        const seen = new Set<string>()
+        const merged: SpotifyAlbum[] = []
+        for (const album of [...artistAlbums, ...(data.albums?.items ?? [])]) {
+          if (!seen.has(album.id)) {
+            seen.add(album.id)
+            merged.push(album)
+          }
+        }
+        data.albums = {
+          href: data.albums?.href ?? '',
+          items: merged,
+          limit,
+          next: null,
+          offset: 0,
+          previous: null,
+          total: merged.length,
+        }
+      }
+    } catch {
+      // Non-fatal: fall back to the title-based results already fetched.
+    }
+  }
+
   // Since Nov 2024, Spotify returns its editorial/algorithmic playlists
   // (Anime Now, Today's Top Hits, Discover Weekly, daily mixes…) as `null`
   // for third-party apps. Strip them so the UI doesn't crash, and report
@@ -79,6 +109,16 @@ export async function searchSpotify(query: string, types: string[] = ['track', '
   }
 
   return data
+}
+
+async function searchAlbumsByArtist(query: string, limit: number, headers: Record<string, string>): Promise<SpotifyAlbum[]> {
+  const response = await fetch(
+    `https://api.spotify.com/v1/search?q=${encodeURIComponent(`artist:${query}`)}&type=album&limit=${limit}`,
+    { headers }
+  )
+  if (!response.ok) return []
+  const data = await response.json()
+  return data?.albums?.items ?? []
 }
 
 export async function getAlbumTracks(albumId: string): Promise<SpotifyTrack[]> {
