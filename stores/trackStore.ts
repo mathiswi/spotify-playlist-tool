@@ -55,6 +55,7 @@ interface TrackStore {
   getAvailableAlbums: () => Album[]
   toggleAlbumSelection: (albumId: string) => void
   selectAllAlbums: () => void
+  selectAlbumsByIds: (albumIds: string[]) => void
   clearAlbumSelection: () => void
   loadTracksFromSelectedAlbums: () => Promise<void>
   
@@ -365,6 +366,13 @@ export const useTrackStore = create<TrackStore>()(
   },
 
   clearAlbumSelection: () => set({ selectedAlbums: new Set(), selectedTracks: new Set() }),
+
+  selectAlbumsByIds: (albumIds) => {
+    const { selectedAlbums } = get()
+    const newSelection = new Set(selectedAlbums)
+    albumIds.forEach(id => newSelection.add(id))
+    set({ selectedAlbums: newSelection })
+  },
 
   loadTracksFromSelectedAlbums: async () => {
     const { selectedAlbums } = get()

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useTrackStore } from '@/stores/trackStore'
 import { SelectionTable } from '@/components/ui/SelectionTable'
 import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
 import { removeAlbumsFromLibrary, getRecentlyPlayedContextMap } from '@/lib/actions/playlist-actions'
 import { useToast } from '@/hooks/use-toast'
 import { Search } from 'lucide-react'
@@ -16,6 +17,7 @@ export function AlbumTable() {
   const getAvailableAlbums = useTrackStore(state => state.getAvailableAlbums)
   const toggleAlbumSelection = useTrackStore(state => state.toggleAlbumSelection)
   const clearAlbumSelection = useTrackStore(state => state.clearAlbumSelection)
+  const selectAlbumsByIds = useTrackStore(state => state.selectAlbumsByIds)
   const loadSavedAlbums = useTrackStore(state => state.loadSavedAlbums)
   const loadTracksFromSelectedAlbums = useTrackStore(state => state.loadTracksFromSelectedAlbums)
 
@@ -23,6 +25,7 @@ export function AlbumTable() {
   const [removeLoading, setRemoveLoading] = useState(false)
   const [lastPlayedMap, setLastPlayedMap] = useState<Record<string, string>>({})
   const [searchQuery, setSearchQuery] = useState('')
+  const [importText, setImportText] = useState('')
   const hasLoadedRecency = useRef(false)
   const { toast } = useToast()
 
@@ -120,6 +123,28 @@ export function AlbumTable() {
     }
   }
 
+  const handleImportAlbums = () => {
+    // Extract 22-char Spotify IDs from pasted text (JSON array, object, comma/newline separated, etc.)
+    const ids = importText.match(/[A-Za-z0-9]{22}(?![A-Za-z0-9])/g) ?? []
+    const uniqueIds = Array.from(new Set(ids))
+
+    if (uniqueIds.length === 0) {
+      toast({
+        variant: 'destructive',
+        title: 'No album IDs found',
+        description: 'Paste a list of Spotify album IDs (JSON array, comma-separated, etc.).',
+      })
+      return
+    }
+
+    selectAlbumsByIds(uniqueIds)
+    setImportText('')
+    toast({
+      title: 'Albums selected',
+      description: `Selected ${uniqueIds.length} album(s) from the pasted IDs.`,
+    })
+  }
+
   // Transform filtered albums for SelectionTable
   const albumItems = filteredAlbums.map(album => ({
     id: album.id,
@@ -142,6 +167,17 @@ export function AlbumTable() {
           className="pl-9"
           disabled={isLoading}
         />
+      </div>
+      <div className="flex gap-2">
+        <Input
+          placeholder="Paste album IDs or JSON to select them..."
+          value={importText}
+          onChange={(e) => setImportText(e.target.value)}
+          disabled={isLoading}
+        />
+        <Button type="button" onClick={handleImportAlbums} disabled={!importText.trim() || isLoading}>
+          Select
+        </Button>
       </div>
       {searchQuery && !isLoading && (
         <p className="text-sm text-gray-500">
